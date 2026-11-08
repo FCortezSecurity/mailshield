@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass, replace
 
+from mailshield.dns_auth.dkim import DkimResult, audit_dkim
 from mailshield.dns_auth.dmarc import ENFORCING, DmarcResult, audit_dmarc
 from mailshield.dns_auth.resolver import Resolver
 from mailshield.dns_auth.spf import SpfResult, audit_spf
@@ -26,11 +28,12 @@ class AuditReport:
     grade: str
     spf: SpfResult
     dmarc: DmarcResult
+    dkim: DkimResult
 
     @property
     def findings(self) -> list[Finding]:
         return sorted(
-            [*self.spf.findings, *self.dmarc.findings],
+            [*self.spf.findings, *self.dmarc.findings, *self.dkim.findings],
             key=lambda f: f.severity,
             reverse=True,
         )
@@ -42,19 +45,26 @@ class AuditReport:
             "grade": self.grade,
             "spf": {"record": self.spf.record, "lookups": self.spf.lookups},
             "dmarc": {"record": self.dmarc.record, "policy": self.dmarc.policy},
+            "dkim": {
+                "selectors_probed": len(self.dkim.probed),
+                "selectors_found": [k.selector for k in self.dkim.keys],
+            },
             "findings": [f.to_dict() for f in self.findings],
         }
 
 
-def audit_domain(raw_domain: str, resolver: Resolver) -> AuditReport:
+def audit_domain(raw_domain: str, resolver: Resolver, selectors: Sequence[str] = ()) -> AuditReport:
     domain = normalize_domain(raw_domain)
     spf = audit_spf(domain, resolver)
     dmarc = audit_dmarc(domain, resolver)
+    dkim = audit_dkim(domain, resolver, selectors)
     if dmarc.policy in ENFORCING:
         # Softfail is fine when DMARC enforces, so it should not cost points.
         spf.findings = [
-            replace(f, severity=Severity.INFO) if f.id == "SPF-SOFTFAIL" else f
+            replace(f, severity=Severity.INFO, fix="No action needed while DMARC enforces.")
+            if f.id == "SPF-SOFTFAIL"
+            else f
             for f in spf.findings
         ]
-    value = score([*spf.findings, *dmarc.findings])
-    return AuditReport(domain, value, grade(value), spf, dmarc)
+    value = score([*spf.findings, *dmarc.findings, *dkim.findings])
+    return AuditReport(domain, value, grade(value), spf, dmarc, dkim)

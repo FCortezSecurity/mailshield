@@ -25,7 +25,12 @@ def _print_text(report: AuditReport) -> None:
     console = Console()
     console.print(f"[bold]{report.domain}[/bold]  score {report.score}/100  grade {report.grade}")
     console.print(f"SPF:   {report.spf.record or 'none'} ({report.spf.lookups} lookups)")
-    console.print(f"DMARC: {report.dmarc.record or 'none'}\n")
+    console.print(f"DMARC: {report.dmarc.record or 'none'}")
+    found = [k.selector for k in report.dkim.keys]
+    dkim_text = (
+        ", ".join(found) if found else f"none among {len(report.dkim.probed)} common selectors"
+    )
+    console.print(f"DKIM:  {dkim_text}\n")
     if not report.findings:
         console.print("[green]No findings.[/green]")
         return
@@ -49,6 +54,12 @@ def build_parser() -> argparse.ArgumentParser:
     audit = sub.add_parser("audit", help="audit a domain's SPF and DMARC records")
     audit.add_argument("domain")
     audit.add_argument("--format", choices=["text", "json", "markdown"], default="text")
+    audit.add_argument(
+        "--selector",
+        action="append",
+        default=[],
+        help="extra DKIM selector to probe (repeatable)",
+    )
     audit.add_argument("--timeout", type=float, default=5.0, help="DNS timeout in seconds")
     audit.add_argument(
         "--fail-on",
@@ -61,7 +72,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        report = audit_domain(args.domain, DnsResolver(timeout=args.timeout))
+        report = audit_domain(args.domain, DnsResolver(timeout=args.timeout), args.selector)
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

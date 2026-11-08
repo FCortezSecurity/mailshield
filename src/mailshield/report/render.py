@@ -5,6 +5,13 @@ import json
 from mailshield.audit import AuditReport
 
 
+def _dkim_summary(report: AuditReport) -> str:
+    found = [k.selector for k in report.dkim.keys]
+    if found:
+        return ", ".join(found)
+    return f"none among {len(report.dkim.probed)} common selectors"
+
+
 def to_json(report: AuditReport) -> str:
     return json.dumps(report.to_dict(), indent=2)
 
@@ -17,6 +24,7 @@ def to_markdown(report: AuditReport) -> str:
         "",
         f"- SPF record: `{report.spf.record or 'none'}` ({report.spf.lookups} DNS lookups)",
         f"- DMARC record: `{report.dmarc.record or 'none'}`",
+        f"- DKIM selectors found: {_dkim_summary(report)}",
         "",
         "## Findings",
         "",
