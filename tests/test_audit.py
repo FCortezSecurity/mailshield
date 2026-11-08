@@ -35,3 +35,23 @@ def test_bad_domain_scores_low_and_reports_render(make_resolver):
     data = json.loads(to_json(report))
     assert data["domain"] == "example.com" and len(data["findings"]) == 2
     assert "SPF-MISSING" in to_markdown(report)
+
+
+def test_softfail_is_free_when_dmarc_enforces(make_resolver):
+    r = make_resolver(
+        {
+            "example.com": ["v=spf1 ip4:192.0.2.1 ~all"],
+            "_dmarc.example.com": ["v=DMARC1; p=reject; rua=mailto:a@example.com"],
+        }
+    )
+    assert audit_domain("example.com", r).score == 100
+
+
+def test_softfail_costs_points_without_enforcement(make_resolver):
+    r = make_resolver(
+        {
+            "example.com": ["v=spf1 ip4:192.0.2.1 ~all"],
+            "_dmarc.example.com": ["v=DMARC1; p=none; rua=mailto:a@example.com"],
+        }
+    )
+    assert audit_domain("example.com", r).score == 80

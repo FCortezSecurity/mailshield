@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
-from mailshield.dns_auth.dmarc import DmarcResult, audit_dmarc
+from mailshield.dns_auth.dmarc import ENFORCING, DmarcResult, audit_dmarc
 from mailshield.dns_auth.resolver import Resolver
 from mailshield.dns_auth.spf import SpfResult, audit_spf
-from mailshield.models import Finding
+from mailshield.models import Finding, Severity
 from mailshield.scoring import grade, score
 
 _DOMAIN_RE = re.compile(r"^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
@@ -50,5 +50,11 @@ def audit_domain(raw_domain: str, resolver: Resolver) -> AuditReport:
     domain = normalize_domain(raw_domain)
     spf = audit_spf(domain, resolver)
     dmarc = audit_dmarc(domain, resolver)
+    if dmarc.policy in ENFORCING:
+        # Softfail is fine when DMARC enforces, so it should not cost points.
+        spf.findings = [
+            replace(f, severity=Severity.INFO) if f.id == "SPF-SOFTFAIL" else f
+            for f in spf.findings
+        ]
     value = score([*spf.findings, *dmarc.findings])
     return AuditReport(domain, value, grade(value), spf, dmarc)
