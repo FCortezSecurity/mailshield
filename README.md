@@ -21,13 +21,22 @@ pytest
 ## Example
 
 ```text
-(paste the output of: mailshield audit google.com)
-```
+$ mailshield audit google.com --format markdown
 
-A weak configuration (a test domain with a missing DMARC record and `+all` in SPF):
+# Email authentication audit: google.com
 
-```text
-(paste the output for a domain you control, or mocked records)
+**Score:** 100/100 (grade A)
+
+- SPF record: `v=spf1 include:_spf.google.com ~all` (1 DNS lookups)
+- DMARC record: `v=DMARC1; p=reject; rua=mailto:mailauth-reports@google.com`
+
+## Findings
+
+### [INFO] SPF uses softfail (~all) (`SPF-SOFTFAIL`)
+
+Unlisted senders are marked suspicious rather than rejected. This is acceptable when DMARC enforces, otherwise it is weak.
+
+**Fix:** Move to -all once all legitimate senders are listed.
 ```
 
 ## What it checks
