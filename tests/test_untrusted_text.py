@@ -43,3 +43,8 @@ def test_text_output_survives_markup_in_dns_data(monkeypatch, capsys, make_resol
 
 def test_audit_report_object_still_builds(make_resolver):
     assert audit_domain("example.com", make_resolver()).score == 50
+
+
+def test_clean_shows_hidden_and_reversing_characters_escaped():
+    assert clean("a\u202egpj.exe") == "a\\u202egpj.exe"
+    assert clean("zero\u200bwidth") == "zero\\u200bwidth"
