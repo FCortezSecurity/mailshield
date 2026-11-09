@@ -106,3 +106,16 @@ def test_custom_selector_is_probed_once(make_resolver):
 def test_dns_errors_are_reported(make_resolver):
     r = make_resolver(errors=["default._domainkey.example.com"])
     assert "DKIM-DNS-ERROR" in ids(audit_dkim("example.com", r).findings)
+
+
+def test_probe_summary_wording():
+    from mailshield.dns_auth.dkim import probe_summary
+
+    assert probe_summary(list(COMMON_SELECTORS)) == "20 common selectors"
+    assert probe_summary(["acme", *COMMON_SELECTORS]) == "20 common selectors + 1 custom"
+
+
+def test_not_found_title_mentions_probed_when_custom(make_resolver):
+    result = audit_dkim("example.com", make_resolver(), extra_selectors=["acme"])
+    assert "probed selectors" in result.findings[0].title
+    assert "1 custom" in result.findings[0].detail

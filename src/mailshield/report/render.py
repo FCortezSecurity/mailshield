@@ -3,13 +3,14 @@ from __future__ import annotations
 import json
 
 from mailshield.audit import AuditReport
+from mailshield.dns_auth.dkim import probe_summary
 
 
-def _dkim_summary(report: AuditReport) -> str:
+def dkim_summary(report: AuditReport) -> str:
     found = [k.selector for k in report.dkim.keys]
     if found:
         return ", ".join(found)
-    return f"none among {len(report.dkim.probed)} common selectors"
+    return f"none among {probe_summary(report.dkim.probed)}"
 
 
 def to_json(report: AuditReport) -> str:
@@ -24,7 +25,7 @@ def to_markdown(report: AuditReport) -> str:
         "",
         f"- SPF record: `{report.spf.record or 'none'}` ({report.spf.lookups} DNS lookups)",
         f"- DMARC record: `{report.dmarc.record or 'none'}`",
-        f"- DKIM selectors found: {_dkim_summary(report)}",
+        f"- DKIM selectors found: {dkim_summary(report)}",
         "",
         "## Findings",
         "",

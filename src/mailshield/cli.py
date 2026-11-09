@@ -11,6 +11,7 @@ from mailshield.audit import AuditReport, audit_domain
 from mailshield.dns_auth.resolver import DnsResolver
 from mailshield.models import Severity
 from mailshield.report import to_json, to_markdown
+from mailshield.report.render import dkim_summary
 
 COLORS = {
     Severity.CRITICAL: "bold red",
@@ -26,11 +27,7 @@ def _print_text(report: AuditReport) -> None:
     console.print(f"[bold]{report.domain}[/bold]  score {report.score}/100  grade {report.grade}")
     console.print(f"SPF:   {report.spf.record or 'none'} ({report.spf.lookups} lookups)")
     console.print(f"DMARC: {report.dmarc.record or 'none'}")
-    found = [k.selector for k in report.dkim.keys]
-    dkim_text = (
-        ", ".join(found) if found else f"none among {len(report.dkim.probed)} common selectors"
-    )
-    console.print(f"DKIM:  {dkim_text}\n")
+    console.print(f"DKIM:  {dkim_summary(report)}\n")
     if not report.findings:
         console.print("[green]No findings.[/green]")
         return

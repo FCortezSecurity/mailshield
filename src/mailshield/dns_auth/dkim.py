@@ -35,6 +35,13 @@ COMMON_SELECTORS = (
 )
 
 
+def probe_summary(probed: Sequence[str], noun: str = "selectors") -> str:
+    common = sum(1 for s in probed if s in COMMON_SELECTORS)
+    custom = len(probed) - common
+    text = f"{common} common {noun}"
+    return f"{text} + {custom} custom" if custom else text
+
+
 @dataclass
 class DkimKey:
     selector: str
@@ -190,8 +197,10 @@ def audit_dkim(domain: str, resolver: Resolver, extra_selectors: Sequence[str] =
             Finding(
                 "DKIM-NOT-FOUND",
                 Severity.INFO,
-                "No DKIM key found among common selectors",
-                f"Probed {len(selectors)} common selector names. DKIM selectors cannot be "
+                "No DKIM key found among probed selectors"
+                if len(selectors) != len(COMMON_SELECTORS)
+                else "No DKIM key found among common selectors",
+                f"Probed {probe_summary(selectors, 'selector names')}. DKIM selectors cannot be "
                 "listed via DNS, so the domain may still use a custom selector.",
                 "Re-run with --selector <name> using the selector from a real message header.",
             )
