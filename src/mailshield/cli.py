@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from pathlib import Path
 
 from rich.console import Console
 from rich.table import Table
@@ -11,7 +12,7 @@ from mailshield.audit import AuditReport, audit_domain
 from mailshield.dns_auth.resolver import DnsResolver
 from mailshield.fetch import HttpsPolicyFetcher
 from mailshield.models import Severity
-from mailshield.report import to_json, to_markdown
+from mailshield.report import to_html, to_json, to_markdown
 from mailshield.report.render import dkim_summary, mta_sts_summary, tls_rpt_summary
 
 COLORS = {
@@ -53,7 +54,12 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
     audit = sub.add_parser("audit", help="audit a domain's SPF and DMARC records")
     audit.add_argument("domain")
-    audit.add_argument("--format", choices=["text", "json", "markdown"], default="text")
+    audit.add_argument("--format", choices=["text", "json", "markdown", "html"], default="text")
+    audit.add_argument(
+        "-o",
+        "--output",
+        help="write the report to this file instead of printing it (not for --format text)",
+    )
     audit.add_argument(
         "--selector",
         action="append",
@@ -86,12 +92,19 @@ def main(argv: list[str] | None = None) -> int:
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
-    if args.format == "json":
-        print(to_json(report))
-    elif args.format == "markdown":
-        print(to_markdown(report))
-    else:
+    renderers = {"json": to_json, "markdown": to_markdown, "html": to_html}
+    if args.format == "text":
+        if args.output:
+            print("error: --output needs --format json, markdown or html", file=sys.stderr)
+            return 2
         _print_text(report)
+    else:
+        content = renderers[args.format](report)
+        if args.output:
+            Path(args.output).write_text(content, encoding="utf-8")
+            print(f"wrote {args.output}", file=sys.stderr)
+        else:
+            print(content)
     if args.fail_on:
         threshold = Severity[args.fail_on.upper()]
         if any(f.severity >= threshold for f in report.findings):
