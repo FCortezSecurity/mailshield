@@ -33,7 +33,7 @@ def test_bad_domain_scores_low_and_reports_render(make_resolver):
     report = audit_domain("example.com", make_resolver())
     assert report.score == 50 and report.grade == "F"
     data = json.loads(to_json(report))
-    assert data["domain"] == "example.com" and len(data["findings"]) == 3
+    assert data["domain"] == "example.com" and len(data["findings"]) == 4
     assert "SPF-MISSING" in to_markdown(report)
 
 

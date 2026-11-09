@@ -16,6 +16,19 @@ def dkim_summary(report: AuditReport) -> str:
     return f"{label} {probe_summary(report.dkim.probed)}{suffix}"
 
 
+def mta_sts_summary(report: AuditReport) -> str:
+    sts = report.mta_sts
+    if sts.txt_id is None:
+        return "none"
+    if sts.mode is None:
+        return "record found, policy not read"
+    return f"mode={sts.mode}, max_age={sts.max_age}"
+
+
+def tls_rpt_summary(report: AuditReport) -> str:
+    return report.tls_rpt.record or "none"
+
+
 def to_json(report: AuditReport) -> str:
     return json.dumps(report.to_dict(), indent=2)
 
@@ -29,6 +42,8 @@ def to_markdown(report: AuditReport) -> str:
         f"- SPF record: `{report.spf.record or 'none'}` ({report.spf.lookups} DNS lookups)",
         f"- DMARC record: `{report.dmarc.record or 'none'}`",
         f"- DKIM selectors found: {dkim_summary(report)}",
+        f"- MTA-STS: {mta_sts_summary(report)}",
+        f"- TLS-RPT: {tls_rpt_summary(report)}",
         "",
         "## Findings",
         "",

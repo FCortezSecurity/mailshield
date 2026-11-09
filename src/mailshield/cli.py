@@ -9,9 +9,10 @@ from rich.table import Table
 from mailshield import __version__
 from mailshield.audit import AuditReport, audit_domain
 from mailshield.dns_auth.resolver import DnsResolver
+from mailshield.fetch import HttpsPolicyFetcher
 from mailshield.models import Severity
 from mailshield.report import to_json, to_markdown
-from mailshield.report.render import dkim_summary
+from mailshield.report.render import dkim_summary, mta_sts_summary, tls_rpt_summary
 
 COLORS = {
     Severity.CRITICAL: "bold red",
@@ -27,7 +28,9 @@ def _print_text(report: AuditReport) -> None:
     console.print(f"[bold]{report.domain}[/bold]  score {report.score}/100  grade {report.grade}")
     console.print(f"SPF:   {report.spf.record or 'none'} ({report.spf.lookups} lookups)")
     console.print(f"DMARC: {report.dmarc.record or 'none'}")
-    console.print(f"DKIM:  {dkim_summary(report)}\n")
+    console.print(f"DKIM:  {dkim_summary(report)}")
+    console.print(f"MTA-STS: {mta_sts_summary(report)}")
+    console.print(f"TLS-RPT: {tls_rpt_summary(report)}\n")
     if not report.findings:
         console.print("[green]No findings.[/green]")
         return
@@ -57,7 +60,14 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         help="extra DKIM selector to probe (repeatable)",
     )
-    audit.add_argument("--timeout", type=float, default=5.0, help="DNS timeout in seconds")
+    audit.add_argument(
+        "--no-fetch",
+        action="store_true",
+        help="do not download the MTA-STS policy file (DNS lookups only)",
+    )
+    audit.add_argument(
+        "--timeout", type=float, default=5.0, help="DNS and HTTPS timeout in seconds"
+    )
     audit.add_argument(
         "--fail-on",
         choices=[s.label for s in Severity],
@@ -69,7 +79,10 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        report = audit_domain(args.domain, DnsResolver(timeout=args.timeout), args.selector)
+        fetcher = None if args.no_fetch else HttpsPolicyFetcher(timeout=args.timeout)
+        report = audit_domain(
+            args.domain, DnsResolver(timeout=args.timeout), args.selector, fetcher
+        )
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2

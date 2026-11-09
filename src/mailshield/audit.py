@@ -6,8 +6,11 @@ from dataclasses import dataclass, replace
 
 from mailshield.dns_auth.dkim import DkimResult, audit_dkim
 from mailshield.dns_auth.dmarc import ENFORCING, DmarcResult, audit_dmarc
+from mailshield.dns_auth.mta_sts import ACTIVE_MODES, MtaStsResult, audit_mta_sts
 from mailshield.dns_auth.resolver import Resolver
 from mailshield.dns_auth.spf import SpfResult, audit_spf, is_null_sender_policy
+from mailshield.dns_auth.tls_rpt import TlsRptResult, audit_tls_rpt
+from mailshield.fetch import PolicyFetcher
 from mailshield.models import Finding, Severity
 from mailshield.scoring import grade, score
 
@@ -29,12 +32,20 @@ class AuditReport:
     spf: SpfResult
     dmarc: DmarcResult
     dkim: DkimResult
+    mta_sts: MtaStsResult
+    tls_rpt: TlsRptResult
     null_sender: bool = False
 
     @property
     def findings(self) -> list[Finding]:
         return sorted(
-            [*self.spf.findings, *self.dmarc.findings, *self.dkim.findings],
+            [
+                *self.spf.findings,
+                *self.dmarc.findings,
+                *self.dkim.findings,
+                *self.mta_sts.findings,
+                *self.tls_rpt.findings,
+            ],
             key=lambda f: f.severity,
             reverse=True,
         )
@@ -51,16 +62,36 @@ class AuditReport:
                 "selectors_found": [k.selector for k in self.dkim.keys if not k.revoked],
                 "selectors_revoked": [k.selector for k in self.dkim.keys if k.revoked],
             },
+            "mta_sts": {
+                "id": self.mta_sts.txt_id,
+                "mode": self.mta_sts.mode,
+                "max_age": self.mta_sts.max_age,
+                "mx": self.mta_sts.mx,
+                "policy_fetched": self.mta_sts.fetched,
+            },
+            "tls_rpt": {"record": self.tls_rpt.record},
             "null_sender": self.null_sender,
             "findings": [f.to_dict() for f in self.findings],
         }
 
 
-def audit_domain(raw_domain: str, resolver: Resolver, selectors: Sequence[str] = ()) -> AuditReport:
+def audit_domain(
+    raw_domain: str,
+    resolver: Resolver,
+    selectors: Sequence[str] = (),
+    fetcher: PolicyFetcher | None = None,
+) -> AuditReport:
     domain = normalize_domain(raw_domain)
     spf = audit_spf(domain, resolver)
     dmarc = audit_dmarc(domain, resolver)
     dkim = audit_dkim(domain, resolver, selectors)
+    mta_sts = audit_mta_sts(domain, resolver, fetcher)
+    tls_rpt = audit_tls_rpt(
+        domain,
+        resolver,
+        mta_sts_present=mta_sts.txt_id is not None,
+        mta_sts_active=mta_sts.mode in ACTIVE_MODES,
+    )
     if dmarc.policy in ENFORCING:
         # Softfail is fine when DMARC enforces, so it should not cost points.
         spf.findings = [
@@ -80,9 +111,13 @@ def audit_domain(raw_domain: str, resolver: Resolver, selectors: Sequence[str] =
             "DMARC-STRICT-ASPF",
             "DKIM-NOT-FOUND",
             "DKIM-REVOKED",
+            "MTA-STS-MISSING",
+            "TLSRPT-MISSING",
         }
         dmarc.findings = [f for f in dmarc.findings if f.id not in irrelevant]
         dkim.findings = [f for f in dkim.findings if f.id not in irrelevant]
+        mta_sts.findings = [f for f in mta_sts.findings if f.id not in irrelevant]
+        tls_rpt.findings = [f for f in tls_rpt.findings if f.id not in irrelevant]
         spf.findings.append(
             Finding(
                 "NULL-SENDER-DOMAIN",
@@ -93,5 +128,7 @@ def audit_domain(raw_domain: str, resolver: Resolver, selectors: Sequence[str] =
                 "No action needed. Keep both records in place to prevent spoofing.",
             )
         )
-    value = score([*spf.findings, *dmarc.findings, *dkim.findings])
-    return AuditReport(domain, value, grade(value), spf, dmarc, dkim, null_sender)
+    value = score(
+        [*spf.findings, *dmarc.findings, *dkim.findings, *mta_sts.findings, *tls_rpt.findings]
+    )
+    return AuditReport(domain, value, grade(value), spf, dmarc, dkim, mta_sts, tls_rpt, null_sender)
