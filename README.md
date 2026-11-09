@@ -2,10 +2,12 @@
 
 ![CI](https://github.com/FCortezSecurity/mailshield/actions/workflows/ci.yml/badge.svg)
 
-Defensive email-security toolkit. It audits a domain's email authentication and transport security and explains how to fix what it finds.
+A defensive email-security toolkit with two parts:
 
-- `mailshield audit <domain>` checks SPF, DMARC, DKIM, MTA-STS and TLS-RPT and gives a score, a grade, and plain-English fixes.
-- Phishing `.eml` triage is planned: offline, analysis only, synthetic test data.
+- **`mailshield audit <domain>`** checks a domain's SPF, DMARC, DKIM, MTA-STS and TLS-RPT setup, scores it, and explains each fix in plain English.
+- **`mailshield triage <file.eml>`** analyzes a suspicious email **offline** (headers, links, attachments, look-alike domains and wording) and returns a risk score with the specific reasons behind it. It never visits links or opens attachments.
+
+Both parts are built to be safe to point at hostile input: everything they read from DNS, remote servers or email files is treated as untrusted. See [docs/DESIGN.md](docs/DESIGN.md) for the design decisions and the bugs the tests caught along the way.
 
 ## Quick start
 
@@ -13,14 +15,22 @@ Defensive email-security toolkit. It audits a domain's email authentication and 
 git clone https://github.com/FCortezSecurity/mailshield.git
 cd mailshield
 pip install -e ".[dev]"
+
 mailshield audit example.com
-mailshield audit example.com --format json
-mailshield audit example.com --selector myselector
-mailshield audit example.com --no-fetch
+mailshield audit example.com --format html -o report.html
+mailshield audit example.com --selector myselector --no-fetch
+
+mailshield triage tests/fixtures/ceo_fraud.eml
+mailshield triage suspicious.eml --protected-name "Jane Smith" --trusted-domain example.org
+
 pytest
 ```
 
-## Examples
+Requires Python 3.10 or newer. Runtime dependencies: `dnspython` and `rich` (nothing else, to keep the supply-chain surface small).
+
+## Audit
+
+`mailshield audit` options: `--format text|json|markdown|html`, `-o FILE`, `--selector NAME` (repeatable), `--no-fetch` (DNS only), `--timeout SECONDS`, and `--fail-on SEVERITY` (exit code 1 if any finding is at or above that level, for use in CI).
 
 A large, well-configured domain:
 
@@ -82,88 +92,124 @@ SPF is '-all' with no authorized senders and DMARC enforces, so this domain decl
 **Fix:** No action needed. Keep both records in place to prevent spoofing.
 ```
 
-A deliberately weak, simulated configuration (see `examples/weak_demo.py`; no real domain is queried):
+A deliberately weak, simulated configuration is available offline with `python examples/weak_demo.py` (add a filename to write the HTML report). No real domain is queried.
+
+### What the audit checks
+
+- **SPF:** missing or duplicate records, `+all`, `?all`, `~all`, no `all`, `ptr`, unknown mechanisms, include loops, dead includes, and the 10 DNS lookup limit across nested includes.
+- **DMARC:** missing, duplicate or invalid records, `p=none`, partial `pct`, `sp=none`, missing `rua`, strict alignment.
+- **DKIM:** probes 20 common selectors (plus any you pass), reads the RSA key size, and flags keys under 2048 bits, revoked keys, and testing mode (`t=y`).
+- **MTA-STS:** validates the DNS record and downloads the policy file. Flags unreachable or invalid policies, bad certificates, redirects, wrong content type, `testing` or `none` mode, short `max_age`, and MX hosts missing from the policy, which would cause mail to be refused in enforce mode.
+- **TLS-RPT:** validates the reporting record and flags a missing record when MTA-STS is active.
+- **No-mail domains:** `v=spf1 -all` plus an enforcing DMARC policy (and wildcard-revoked DKIM keys) is recognized as deliberate, and checks that do not apply are skipped.
+
+Scores run from 0 to 100 with an A to F grade. Severities cost points: critical 50, high 25, medium 15, low 5, info 0. Informational findings never affect the score. Scoring is opinionated (an MTA-STS `max_age` under a week is a low finding even though some large providers choose that on purpose), so read the findings, not just the grade.
+
+## Triage
+
+`mailshield triage` options: `--format text|json|markdown`, `-o FILE`, `--protected-name NAME` (people likely to be impersonated, repeatable), `--trusted-domain DOMAIN` (your own domains, repeatable; used for impersonation and look-alike checks). `--protected-name` requires at least one `--trusted-domain`.
+
+Example, a synthetic message (reserved example domains) that imitates an executive and asks for changed wire instructions:
 
 ```text
-# Email authentication audit: weak.example
+$ mailshield triage tests/fixtures/wire_change.eml --protected-name "Jane Smith" --trusted-domain example.org --format markdown
 
-**Score:** 25/100 (grade F)
+# Phishing triage: Urgent - closing funds
 
-- SPF record: `v=spf1 +all` (0 DNS lookups)
-- DMARC record: `none`
-- DKIM selectors found: none among 20 common selectors
-- MTA-STS: none
-- TLS-RPT: none
+**Risk:** 100/100 (likely phishing)
+
+- From: Jane Smith \<jane.smith@example.net\>
+- Reply-To: jane.smith.office@gmail.com
+- Return-Path: none
+- Authentication results: spf=pass, dkim=pass, dmarc=pass
+- Received hops: 1
+- Links found: 0
 
 ## Findings
 
-### [CRITICAL] SPF allows every sender (+all) (`SPF-ALL-PLUS`)
+### [HIGH] Replies go to a free mailbox instead of the sender's domain (`HDR-REPLYTO-FREEMAIL`)
 
-'+all' authorizes any server on the internet to send as this domain.
+From is example.net but replies go to jane.smith.office@gmail.com. Redirecting replies is how business email compromise keeps the victim talking to the attacker.
 
-**Fix:** Replace with -all (or ~all while testing).
+**Next step:** Confirm the request through a channel you already trust, not by replying.
 
-### [HIGH] No DMARC record (`DMARC-MISSING`)
+### [HIGH] Sender uses the name of Jane Smith from an untrusted domain (`HDR-IMPERSONATION`)
 
-_dmarc.weak.example has no DMARC record, so receivers have no policy for spoofed mail and you get no reports about abuse.
+The display name matches a protected person but the mail comes from example.net, which is not one of your trusted domains. Executive impersonation is the usual opening of wire-fraud attempts.
 
-**Fix:** Publish a TXT record at _dmarc such as "v=DMARC1; p=none; rua=mailto:you@example.com" and tighten the policy over time.
+**Next step:** Verify the request with the real person by phone or in person.
 
-### [INFO] No DKIM key found among common selectors (`DKIM-NOT-FOUND`)
+### [HIGH] Domain imitates one of your domains (`LOOK-TLD-SWAP`)
 
-Probed 20 common selector names. DKIM selectors cannot be listed via DNS, so the domain may still use a custom selector.
+example.net (from the sender address) uses the same name with a different ending: it resembles example.org.
 
-**Fix:** Re-run with --selector <name> using the selector from a real message header.
+**Next step:** Compare the real domain character by character, and report it if unexpected.
 
-### [INFO] No MTA-STS policy (`MTA-STS-MISSING`)
+### [HIGH] Message asks to change payment or banking details (`TXT-PAYMENT-CHANGE`)
 
-MTA-STS makes sending servers require TLS when delivering mail to you, which blocks downgrade attacks. It is optional hardening.
+Changing where money is sent is the core move of invoice and vendor fraud. Matched: 'update our wire instructions'; 'new account number'; 'account number and routing number'.
 
-**Fix:** Publish a _mta-sts TXT record and a policy file at https://mta-sts.weak.example/.well-known/mta-sts.txt.
+**Next step:** Verify by phoning a number you already have on file, not one from this message.
+
+### [HIGH] Message mixes a closing or escrow with wire details (`TXT-CLOSING-WIRE`)
+
+Fraudulent wire instructions sent just before a property closing are a leading real estate scam. Matched: 'closing funds Hi, I'm in a m ... update our wire instructions'; 'our wire instructions for the closing'.
+
+**Next step:** Confirm wire instructions by phone with the title or escrow company directly.
+
+### [MEDIUM] Message combines urgency with pressure or secrecy (`TXT-URGENCY-SECRECY`)
+
+Pushing for speed and silence keeps victims from checking with anyone. Matched: 'Urgent'; 'immediately'; 'confidential'.
+
+**Next step:** Slow down and verify through another channel before acting.
+
+---
+
+_Heuristic result from headers, links, attachments and wording. Links were never visited and attachments were never opened. A message with no findings can still be malicious, and a finding is a reason to look closer, not proof._
 ```
 
-## What it checks
+### What triage checks
 
-- **SPF:** missing or duplicate records, `+all`, `?all`, `~all`, no `all`, `ptr`, unknown mechanisms, include loops, dead includes, and the 10 DNS lookup limit across nested includes.
-- **DMARC:** missing, duplicate, or invalid records, `p=none`, partial `pct`, `sp=none`, missing `rua`, and strict alignment.
-- **DKIM:** probes 20 common selectors (add your own with `--selector`), reads the RSA key size, and flags keys under 2048 bits, revoked keys, and testing mode (`t=y`).
-- **MTA-STS:** validates the DNS record and downloads the policy file. Flags unreachable or invalid policies, bad certificates, redirects, wrong content type, `testing` or `none` mode, short `max_age`, and **MX hosts that are missing from the policy**, which would cause mail to be refused in enforce mode.
-- **TLS-RPT:** validates the reporting record and flags a missing record when MTA-STS is active.
-- **No-mail domains:** recognizes `v=spf1 -all` plus an enforcing DMARC policy (and wildcard-revoked DKIM keys) as a deliberate "this domain sends no email" setup, and skips checks that do not apply.
-- **Exit codes:** `--fail-on high` returns 1 when a finding at or above that severity exists, so it works in CI.
+- **Headers:** duplicate or missing From, Reply-To pointing elsewhere (high severity when it goes to a free mailbox), envelope-sender mismatch, SPF/DKIM/DMARC results from the topmost `Authentication-Results` header, display-name spoofing, impersonation of people you name, out-of-order Received timestamps, and a Date far from the first server timestamp.
+- **Links:** link text that shows one site while the link goes to another, raw IP addresses (including obfuscated forms), URL shorteners, punycode domains, the `https://good.com@evil.com` trick, and HTML forms.
+- **Attachments:** double extensions, executable and script types, macro-enabled Office files, HTML/SVG files, archives, names with hidden or reversing characters, and files whose bytes are a program but whose name says otherwise. SHA-256 hashes are reported for manual lookup.
+- **Look-alike domains:** homoglyphs (including punycode), a different ending, small typos, and embedded names, compared against the domains you declare with `--trusted-domain`.
+- **Wording:** changed payment details, closing or escrow combined with wire details, gift cards, account-verification lures, and urgency combined with secrecy. Every hit quotes the phrase that matched.
 
-## Scoring
-
-Scores run from 0 to 100 with an A to F grade. Severities cost points: critical 50, high 25, medium 15, low 5, info 0. Informational findings never affect the score, and SPF softfail is not penalized when DMARC enforces.
-
-Scoring is opinionated. For example, an MTA-STS `max_age` under one week is a low finding even though some large providers choose short values on purpose. Read the findings, not just the grade.
+The verdict is `no strong indicators`, `suspicious` (risk 25 or more) or `likely phishing` (60 or more). It never says "safe": a message with no findings can still be malicious.
 
 ## Security design
 
-The MTA-STS policy download is the only request that goes beyond DNS, so it is deliberately defensive:
-
-- HTTPS only, with the certificate and hostname always verified.
-- Redirects are never followed (RFC 8461 forbids them).
-- Hostnames that resolve to loopback, private, link-local or cloud-metadata addresses are refused, so a hostile domain cannot aim the tool at internal services.
-- Response size (64 KB) and total time are capped.
-- `--no-fetch` disables the download entirely.
-
-The test suite never touches the network: DNS and HTTPS are replaced by fakes.
-
-## Status
-
-SPF, DMARC, DKIM, MTA-STS and TLS-RPT auditing are done. An HTML report and phishing triage are next.
+- **Triage is fully offline.** No DNS, no HTTP. Links are parsed but never visited, and every URL in the output is defanged (`hxxps://evil[.]com`). Attachments are decoded in memory only to hash them and are never opened or written to disk. Input files over 10 MB are refused.
+- **The MTA-STS download is the only request beyond DNS, and it is defensive.** HTTPS only, certificate and hostname always verified, redirects never followed (RFC 8461 forbids them), response size and total time capped, and hostnames that resolve to loopback, private, link-local or cloud-metadata addresses are refused, so a hostile domain cannot aim the tool at internal services. `--no-fetch` disables it.
+- **All untrusted text is sanitized before display.** Control characters are stripped, bidirectional and zero-width characters are shown escaped, terminal markup is neutralized, and HTML reports escape every value and contain no scripts or external resources.
+- **Tests never touch the network.** DNS and HTTPS are replaced by fakes, and test data is synthetic, written with reserved domains.
 
 ## Limitations
 
+- Triage is a set of heuristics. Expect some false positives and misses, and treat findings as reasons to look closer.
+- Authentication results in email headers are written by the receiving server and cannot be verified from the file alone.
+- Look-alike checks only run against domains you declare with `--trusted-domain`.
+- Domain matching uses a small built-in list of multi-part suffixes, not the full public suffix list.
+- Triage does not analyze attachment contents (macros, nested archives) or message language beyond the listed patterns.
 - DMARC lookup checks `_dmarc.<domain>` only, with no fallback to the parent domain.
-- SPF `redirect=` targets are followed for lookup counting, but their `all` policy is not evaluated.
-- SPF macros are not expanded.
-- DKIM selectors cannot be listed through DNS, so only common selector names (plus any you pass with `--selector`) are probed. "No DKIM key found" is informational and is not proof that DKIM is missing.
-- The MTA-STS policy fetch makes a live HTTPS request. Use `--no-fetch` for DNS-only mode.
-- MX mismatch checking uses the domain's current MX records only.
-- There is no DNSSEC or DANE validation.
-- Checks are based on DNS and the policy file only. They do not test actual mail delivery.
+- SPF `redirect=` targets are followed for lookup counting, but their `all` policy is not evaluated. SPF macros are not expanded.
+- DKIM selectors cannot be listed through DNS, so only common names (plus `--selector`) are probed. "No DKIM key found" is informational, not proof that DKIM is missing.
+- There is no DNSSEC or DANE validation, and nothing tests actual mail delivery.
+
+## Project layout
+
+```text
+src/mailshield/
+  cli.py  audit.py  models.py  scoring.py  fetch.py  textutil.py
+  dns_auth/   resolver, spf, dmarc, dkim, mta_sts, tls_rpt
+  report/     render (json, markdown), html
+  triage/     parser, body, headers, urls, attachments, lookalike,
+              content, domains, verdict, render
+tests/        170 tests; fixtures/ holds synthetic .eml files
+examples/     weak_demo.py
+docs/         DESIGN.md
+```
 
 ## License
 
