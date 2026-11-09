@@ -14,6 +14,9 @@ class Resolver(Protocol):
     def txt(self, name: str) -> list[str]:
         """Return TXT records as strings. Empty list if none exist. Raise DnsError on failure."""
 
+    def mx(self, name: str) -> list[str]:
+        """Return MX target hostnames (lowercase, no trailing dot). Null MX is omitted."""
+
 
 class DnsResolver:
     """Real resolver backed by dnspython, with a hard timeout."""
@@ -31,3 +34,13 @@ class DnsResolver:
         except dns.exception.DNSException as exc:
             raise DnsError(f"{name}: {exc.__class__.__name__}") from exc
         return [b"".join(rdata.strings).decode("utf-8", "replace") for rdata in answer]
+
+    def mx(self, name: str) -> list[str]:
+        try:
+            answer = self._resolver.resolve(name, "MX")
+        except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
+            return []
+        except dns.exception.DNSException as exc:
+            raise DnsError(f"{name}: {exc.__class__.__name__}") from exc
+        hosts = (str(rdata.exchange).rstrip(".").lower() for rdata in answer)
+        return [h for h in hosts if h]
