@@ -48,7 +48,8 @@ class AuditReport:
             "dmarc": {"record": self.dmarc.record, "policy": self.dmarc.policy},
             "dkim": {
                 "selectors_probed": len(self.dkim.probed),
-                "selectors_found": [k.selector for k in self.dkim.keys],
+                "selectors_found": [k.selector for k in self.dkim.keys if not k.revoked],
+                "selectors_revoked": [k.selector for k in self.dkim.keys if k.revoked],
             },
             "null_sender": self.null_sender,
             "findings": [f.to_dict() for f in self.findings],
@@ -73,7 +74,13 @@ def audit_domain(raw_domain: str, resolver: Resolver, selectors: Sequence[str] =
     )
     if null_sender:
         # A domain that declares "I send no mail" doesn't need reporting or DKIM.
-        irrelevant = {"DMARC-NO-RUA", "DMARC-STRICT-ADKIM", "DMARC-STRICT-ASPF", "DKIM-NOT-FOUND"}
+        irrelevant = {
+            "DMARC-NO-RUA",
+            "DMARC-STRICT-ADKIM",
+            "DMARC-STRICT-ASPF",
+            "DKIM-NOT-FOUND",
+            "DKIM-REVOKED",
+        }
         dmarc.findings = [f for f in dmarc.findings if f.id not in irrelevant]
         dkim.findings = [f for f in dkim.findings if f.id not in irrelevant]
         spf.findings.append(

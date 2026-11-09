@@ -119,3 +119,12 @@ def test_not_found_title_mentions_probed_when_custom(make_resolver):
     result = audit_dkim("example.com", make_resolver(), extra_selectors=["acme"])
     assert "probed selectors" in result.findings[0].title
     assert "1 custom" in result.findings[0].detail
+
+
+def test_many_revoked_selectors_become_one_finding(make_resolver):
+    records = {f"{s}._domainkey.example.com": ["v=DKIM1; p="] for s in COMMON_SELECTORS}
+    result = audit_dkim("example.com", make_resolver(records))
+    revoked = [f for f in result.findings if f.id == "DKIM-REVOKED"]
+    assert len(revoked) == 1
+    assert "20 DKIM selectors are revoked" in revoked[0].title
+    assert "wildcard" in revoked[0].detail

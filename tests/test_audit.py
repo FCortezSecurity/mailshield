@@ -84,3 +84,21 @@ def test_domain_with_senders_is_not_null_sender(make_resolver):
         {"example.com": ["v=spf1 ip4:192.0.2.1 -all"], "_dmarc.example.com": [NULL_DMARC]},
     )
     assert audit_domain("example.com", r).null_sender is False
+
+
+def test_null_sender_with_wildcard_revoked_dkim_is_quiet(make_resolver):
+    from mailshield.dns_auth.dkim import COMMON_SELECTORS
+
+    records = {"example.com": ["v=spf1 -all"], "_dmarc.example.com": [NULL_DMARC]}
+    records.update({f"{s}._domainkey.example.com": ["v=DKIM1; p="] for s in COMMON_SELECTORS})
+    report = audit_domain("example.com", make_resolver(records))
+    assert {f.id for f in report.findings} == {"NULL-SENDER-DOMAIN"}
+    assert report.score == 100
+
+
+def test_revoked_keys_are_summarized_separately(make_resolver):
+    from mailshield.report.render import dkim_summary
+
+    r = make_resolver({"k1._domainkey.example.com": ["v=DKIM1; p="]})
+    summary = dkim_summary(audit_domain("example.com", r))
+    assert summary == "none active among 20 common selectors (1 revoked)"

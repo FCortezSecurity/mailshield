@@ -135,16 +135,7 @@ def audit_dkim(domain: str, resolver: Resolver, extra_selectors: Sequence[str] =
         result.keys.append(key)
 
         if key.revoked:
-            findings.append(
-                Finding(
-                    "DKIM-REVOKED",
-                    Severity.INFO,
-                    f"DKIM selector '{selector}' is revoked",
-                    f"{name} has an empty p= tag, which marks the key as revoked.",
-                    "Nothing to do unless you still send mail with this selector.",
-                )
-            )
-            continue
+            continue  # reported once, as a group, after the loop
 
         if key_type == "rsa":
             try:
@@ -191,6 +182,28 @@ def audit_dkim(domain: str, resolver: Resolver, extra_selectors: Sequence[str] =
                     "Remove t=y once you have confirmed signing works.",
                 )
             )
+
+    revoked = [k.selector for k in result.keys if k.revoked]
+    if revoked:
+        shown = ", ".join(revoked[:5]) + (
+            f" and {len(revoked) - 5} more" if len(revoked) > 5 else ""
+        )
+        everything = len(revoked) == len(selectors)
+        findings.append(
+            Finding(
+                "DKIM-REVOKED",
+                Severity.INFO,
+                f"{len(revoked)} DKIM selector{'s are' if len(revoked) != 1 else ' is'} revoked",
+                (
+                    "Every probed selector has an empty p= tag, which is typical of a wildcard "
+                    "revocation used by domains that send no mail. "
+                    if everything
+                    else ""
+                )
+                + f"Revoked: {shown}.",
+                "Nothing to do unless you still send mail with these selectors.",
+            )
+        )
 
     if not result.keys:
         findings.append(

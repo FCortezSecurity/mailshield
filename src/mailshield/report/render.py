@@ -7,10 +7,13 @@ from mailshield.dns_auth.dkim import probe_summary
 
 
 def dkim_summary(report: AuditReport) -> str:
-    found = [k.selector for k in report.dkim.keys]
-    if found:
-        return ", ".join(found)
-    return f"none among {probe_summary(report.dkim.probed)}"
+    active = [k.selector for k in report.dkim.keys if not k.revoked]
+    revoked = sum(1 for k in report.dkim.keys if k.revoked)
+    suffix = f" ({revoked} revoked)" if revoked else ""
+    if active:
+        return ", ".join(active) + suffix
+    label = "none active among" if revoked else "none among"
+    return f"{label} {probe_summary(report.dkim.probed)}{suffix}"
 
 
 def to_json(report: AuditReport) -> str:
