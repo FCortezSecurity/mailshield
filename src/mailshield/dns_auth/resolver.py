@@ -5,6 +5,8 @@ from typing import Protocol
 import dns.exception
 import dns.resolver
 
+from mailshield.textutil import clean
+
 
 class DnsError(Exception):
     """A DNS lookup failed in a way that is not 'record does not exist'."""
@@ -33,7 +35,7 @@ class DnsResolver:
             return []
         except dns.exception.DNSException as exc:
             raise DnsError(f"{name}: {exc.__class__.__name__}") from exc
-        return [b"".join(rdata.strings).decode("utf-8", "replace") for rdata in answer]
+        return [clean(b"".join(rdata.strings).decode("utf-8", "replace")) for rdata in answer]
 
     def mx(self, name: str) -> list[str]:
         try:

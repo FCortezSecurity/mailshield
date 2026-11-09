@@ -20,6 +20,8 @@ import time
 from dataclasses import dataclass
 from typing import Protocol
 
+from mailshield.textutil import clean
+
 MAX_BYTES = 64 * 1024
 
 
@@ -79,7 +81,7 @@ class HttpsPolicyFetcher:
         response = http.client.HTTPResponse(tls, method="GET")
         response.begin()
         status = response.status
-        content_type = response.getheader("Content-Type", "") or ""
+        content_type = clean(response.getheader("Content-Type", "") or "", 200)
         if 300 <= status < 400:
             return FetchResult(status=status, content_type=content_type)
         chunks: list[bytes] = []
