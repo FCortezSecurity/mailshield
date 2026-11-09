@@ -50,7 +50,7 @@ _AUTH_MEANING = {
 }
 
 
-def _addresses(msg: EmailMessage, name: str) -> list[tuple[str, str]]:
+def addresses(msg: EmailMessage, name: str) -> list[tuple[str, str]]:
     found: list[tuple[str, str]] = []
     for raw in msg.get_all(name, []):
         for display, addr in getaddresses([str(raw)]):
@@ -100,9 +100,9 @@ def analyze_headers(
 
     findings: list[Finding] = []
     add = findings.append
-    from_addrs = _addresses(msg, "From")
-    reply_to = _addresses(msg, "Reply-To")
-    return_path = _addresses(msg, "Return-Path")
+    from_addrs = addresses(msg, "From")
+    reply_to = addresses(msg, "Reply-To")
+    return_path = addresses(msg, "Return-Path")
     auth = _auth_results(msg)
     received = msg.get_all("Received", [])
 

@@ -45,3 +45,23 @@ def make_resolver():
 
 def ids(findings):
     return {f.id for f in findings}
+
+
+def make_message(
+    *, html=None, text="", attachments=(), subject="Hello", sender="A <a@example.com>"
+):
+    from email.message import EmailMessage
+
+    from mailshield.triage.parser import parse_eml
+
+    msg = EmailMessage()
+    msg["From"] = sender
+    msg["To"] = "reader@example.org"
+    msg["Subject"] = subject
+    msg.set_content(text or "plain body")
+    if html:
+        msg.add_alternative(html, subtype="html")
+    for name, data, ctype in attachments:
+        maintype, subtype = ctype.split("/")
+        msg.add_attachment(data, maintype=maintype, subtype=subtype, filename=name)
+    return parse_eml(msg.as_bytes())

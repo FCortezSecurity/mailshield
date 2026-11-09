@@ -220,3 +220,79 @@ def test_cli_writes_file(tmp_path):
     out = tmp_path / "triage.md"
     code = main(["triage", str(FIXTURES / "ceo_fraud.eml"), "--format", "markdown", "-o", str(out)])
     assert code == 0 and out.read_text(encoding="utf-8").startswith("# Phishing triage")
+
+
+# --- stage 2 integration -----------------------------------------------------------------
+def test_link_fixture():
+    report, found = fixture_ids("link_mismatch.eml")
+    assert {
+        "URL-TEXT-MISMATCH",
+        "URL-IP-HOST",
+        "URL-SHORTENER",
+        "URL-USERINFO",
+        "URL-PUNYCODE",
+    } <= found
+    assert all(u.startswith("hxxp") for u in report.facts["urls"])
+    assert report.verdict == "likely phishing"
+
+
+def test_attachment_fixture():
+    report, found = fixture_ids("risky_attachment.eml")
+    assert {
+        "ATT-DOUBLE-EXTENSION",
+        "ATT-DANGEROUS-TYPE",
+        "ATT-DISGUISED-EXECUTABLE",
+        "ATT-MACRO-DOCUMENT",
+    } <= found
+    assert {a["name"] for a in report.facts["attachments"]} == {
+        "invoice.pdf.exe",
+        "report.xlsm",
+        "photo.jpg",
+    }
+    assert report.verdict == "likely phishing"
+
+
+def test_lookalike_fixture_needs_trusted_domain():
+    _, found = fixture_ids("lookalike_sender.eml")
+    assert "LOOK-HOMOGLYPH" not in found
+    _, found = fixture_ids("lookalike_sender.eml", trusted_domains=["example.com"])
+    assert "LOOK-HOMOGLYPH" in found
+
+
+def test_wire_change_fixture_combines_header_and_wording_signals():
+    report, found = fixture_ids(
+        "wire_change.eml", protected_names=["Jane Smith"], trusted_domains=["example.org"]
+    )
+    assert {
+        "TXT-PAYMENT-CHANGE",
+        "TXT-CLOSING-WIRE",
+        "TXT-URGENCY-SECRECY",
+        "HDR-REPLYTO-FREEMAIL",
+        "HDR-IMPERSONATION",
+    } <= found
+    assert report.verdict == "likely phishing"
+
+
+def test_wording_alone_is_only_suspicious():
+    msg = parse_eml(
+        b"From: Vendor <ap@example.com>\nSubject: Remittance update\n"
+        b"Authentication-Results: mx.example.net; spf=pass; dkim=pass; dmarc=pass\n"
+        b"Received: x; Tue, 03 Mar 2026 10:00:00 +0000\n\n"
+        b"Please note our updated bank details for future payments.\n"
+    )
+    report = triage_message(msg)
+    assert {f.id for f in report.findings} == {"TXT-PAYMENT-CHANGE"}
+    assert report.verdict == "suspicious"
+
+
+def test_legit_fixture_is_still_clean_with_all_modules():
+    report, found = fixture_ids("legit_newsletter.eml", trusted_domains=["example.com"])
+    assert found == set() and report.facts["attachments"] == [] and report.facts["urls"] == []
+
+
+def test_cli_markdown_lists_attachment_hashes(capsys):
+    assert main(["triage", str(FIXTURES / "risky_attachment.eml"), "--format", "markdown"]) == 0
+    out = capsys.readouterr().out
+    assert "## Attachments" in out and "sha256 `" in out
+    assert main(["triage", str(FIXTURES / "link_mismatch.eml")]) == 0
+    assert "Links:" in capsys.readouterr().out

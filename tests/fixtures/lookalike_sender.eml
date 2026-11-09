@@ -1,0 +1,13 @@
+Received: from relay.example.net (relay.example.net [198.51.100.7]) by
+ mx.example.org with ESMTP id q1 for <finance@example.org>; Wed, 04 Mar 2026
+ 14:00:30 +0000
+Authentication-Results: mx.example.org; spf=pass; dkim=pass; dmarc=pass
+From: "Example Billing" <billing@examp1e.com>
+To: finance@example.org
+Subject: Statement for March
+Date: Wed, 04 Mar 2026 14:00:00 +0000
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+MIME-Version: 1.0
+
+Please find your statement. Questions? Reply to this message.

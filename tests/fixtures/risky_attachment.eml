@@ -1,0 +1,44 @@
+Received: from relay.example.net (relay.example.net [198.51.100.7]) by
+ mx.example.org with ESMTP id q1 for <finance@example.org>; Wed, 04 Mar 2026
+ 14:00:30 +0000
+Authentication-Results: mx.example.org; spf=pass; dkim=pass; dmarc=pass
+From: Accounts Payable <ap@example.net>
+To: finance@example.org
+Subject: Invoice and report
+Date: Wed, 04 Mar 2026 14:00:00 +0000
+MIME-Version: 1.0
+Content-Type: multipart/mixed; boundary="===============1849970029361667391=="
+
+--===============1849970029361667391==
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Please review the attached files.
+
+--===============1849970029361667391==
+Content-Type: application/octet-stream
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="invoice.pdf.exe"
+MIME-Version: 1.0
+
+TVqQAJAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAkACQAJAAkACQ
+AJAAkACQAJAAkACQAJAAkACQAJAAkACQAA==
+
+--===============1849970029361667391==
+Content-Type: application/vnd.ms-excel.sheet.macroEnabled.12
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="report.xlsm"
+MIME-Version: 1.0
+
+UEsDBHh4eHh4eHh4eHh4eHh4eHh4eHh4
+
+--===============1849970029361667391==
+Content-Type: image/jpeg
+Content-Transfer-Encoding: base64
+Content-Disposition: attachment; filename="photo.jpg"
+MIME-Version: 1.0
+
+TVoAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
+AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==
+
+--===============1849970029361667391==--

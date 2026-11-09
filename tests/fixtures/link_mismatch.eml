@@ -1,0 +1,29 @@
+Received: from relay.example.net (relay.example.net [198.51.100.7]) by
+ mx.example.org with ESMTP id q1 for <finance@example.org>; Wed, 04 Mar 2026
+ 14:00:30 +0000
+Authentication-Results: mx.example.org; spf=pass; dkim=pass; dmarc=pass
+From: Account Services <support@example.net>
+To: finance@example.org
+Subject: Action required on your account
+Date: Wed, 04 Mar 2026 14:00:00 +0000
+MIME-Version: 1.0
+Content-Type: multipart/alternative;
+ boundary="===============5016884660543224768=="
+
+--===============5016884660543224768==
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 7bit
+
+Your account needs attention. Open the link: https://bit.ly/3xYz
+
+--===============5016884660543224768==
+Content-Type: text/html; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+MIME-Version: 1.0
+
+<p>Sign in at <a href=3D"http://198.51.100.9/login">https://www.example.com/a=
+ccount</a> or <a href=3D"https://bit.ly/3xYz">open this</a> or <a href=3D"htt=
+ps://www.example.com@evil.example.org/x">view</a> or <a href=3D"https://xn--e=
+xmple-cua.com/">support portal</a>.</p>
+
+--===============5016884660543224768==--

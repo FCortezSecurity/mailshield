@@ -74,6 +74,11 @@ def _print_triage_text(report: TriageReport) -> None:
     console.print(f"Reply-To: {_t(', '.join(report.facts['reply_to']) or 'none')}")
     auth = ", ".join(f"{k}={v}" for k, v in report.facts["authentication"].items())
     console.print(f"Auth:     {_t(auth or 'not present')}")
+    console.print(f"Links:    {len(report.facts.get('urls', []))}")
+    for item in report.facts.get("attachments", []):
+        console.print(
+            f"Attachment: {_t(item['name'])} ({item['size']} bytes) sha256={_t(item['sha256'])}"
+        )
     console.print(f"Risk {report.risk}/100: [{color}]{_t(report.verdict)}[/]\n")
     if report.findings:
         console.print(_findings_table(report.findings, "Next step"))
@@ -153,7 +158,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--trusted-domain",
         action="append",
         default=[],
-        help="domain that legitimately sends mail for protected names (repeatable)",
+        help="one of your own legitimate domains; used for impersonation and look-alike checks (repeatable)",
     )
     return parser
 

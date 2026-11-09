@@ -6,7 +6,13 @@ from email.message import EmailMessage
 
 from mailshield.models import Finding, Severity
 from mailshield.textutil import clean
-from mailshield.triage.headers import analyze_headers
+from mailshield.triage.attachments import inspect_attachments
+from mailshield.triage.body import extract_bodies
+from mailshield.triage.content import analyze_content
+from mailshield.triage.domains import domain_of
+from mailshield.triage.headers import addresses, analyze_headers
+from mailshield.triage.lookalike import check_lookalikes
+from mailshield.triage.urls import analyze_urls
 
 WEIGHTS = {
     Severity.CRITICAL: 50,
@@ -18,8 +24,9 @@ WEIGHTS = {
 LIKELY_PHISHING = 60
 SUSPICIOUS = 25
 DISCLAIMER = (
-    "Heuristic result from header analysis only. A message with no findings can still be "
-    "malicious, and a finding is a reason to look closer, not proof."
+    "Heuristic result from headers, links, attachments and wording. Links were never visited "
+    "and attachments were never opened. A message with no findings can still be malicious, and "
+    "a finding is a reason to look closer, not proof."
 )
 
 
@@ -62,11 +69,24 @@ def triage_message(
     trusted_domains: Sequence[str] = (),
 ) -> TriageReport:
     findings, facts = analyze_headers(msg, protected_names, trusted_domains)
+    subject = clean(msg.get("Subject", "") or "", 200)
+    body = extract_bodies(msg)
+    url_result = analyze_urls(body)
+    attachment_findings, attachment_facts = inspect_attachments(msg)
+    candidates = [("sender address", domain_of(a)) for _, a in addresses(msg, "From")[:1]]
+    candidates += [("Reply-To address", domain_of(a)) for _, a in addresses(msg, "Reply-To")[:1]]
+    candidates += [("links", host) for host in url_result.hosts]
+    findings += url_result.findings
+    findings += attachment_findings
+    findings += check_lookalikes(candidates, trusted_domains)
+    findings += analyze_content(subject, body)
+    facts["urls"] = url_result.urls
+    facts["attachments"] = attachment_facts
     findings.sort(key=lambda f: f.severity, reverse=True)
     risk = risk_score(findings)
     sender = facts["from"][0] if facts["from"] else ""
     return TriageReport(
-        subject=clean(msg.get("Subject", "") or "", 200),
+        subject=subject,
         sender=sender,
         risk=risk,
         verdict=verdict_for(risk),

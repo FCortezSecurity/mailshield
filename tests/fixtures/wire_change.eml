@@ -1,0 +1,17 @@
+Received: from relay.example.net (relay.example.net [198.51.100.7]) by
+ mx.example.org with ESMTP id q1 for <finance@example.org>; Wed, 04 Mar 2026
+ 14:00:30 +0000
+Authentication-Results: mx.example.org; spf=pass; dkim=pass; dmarc=pass
+From: "Jane Smith" <jane.smith@example.net>
+To: finance@example.org
+Subject: Urgent - closing funds
+Date: Wed, 04 Mar 2026 14:00:00 +0000
+Reply-To: jane.smith.office@gmail.com
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+MIME-Version: 1.0
+
+Hi, I'm in a meeting and can't take calls. Please update our wire instruction=
+s for the closing today. The new account number and routing number are below.=
+ This is urgent and confidential, please keep this between us and handle it i=
+mmediately.
