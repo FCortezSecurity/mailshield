@@ -81,3 +81,16 @@ def test_many_links_are_capped_and_findings_aggregated():
 
 def test_broken_html_does_not_crash():
     assert run('<a href="https://[bad"><<<>>><a href=')
+
+
+def test_no_live_urls_anywhere_in_link_findings():
+    from pathlib import Path
+
+    from mailshield.triage.parser import read_eml
+    from mailshield.triage.verdict import triage_message
+
+    fixture = Path(__file__).parent / "fixtures" / "link_mismatch.eml"
+    report = triage_message(read_eml(fixture))
+    for finding in report.findings:
+        assert "http://" not in finding.detail and "https://" not in finding.detail
+    assert not any(f.detail.endswith(".") for f in report.findings if f.id.startswith("URL-"))

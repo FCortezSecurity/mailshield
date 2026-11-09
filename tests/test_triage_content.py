@@ -64,3 +64,10 @@ def test_natural_payment_change_phrasings():
 def test_wire_as_a_verb_near_closing_is_not_flagged():
     assert "TXT-CLOSING-WIRE" not in ids("The closing dinner is at 7pm. Wire me the photos.")
     assert "TXT-CLOSING-WIRE" in ids("Closing is Friday. Here are the wire instructions.")
+
+
+def test_long_proximity_matches_are_shortened_in_evidence():
+    found = ids("Closing is Friday and " + "filler words " * 3 + "here are the wire instructions.")
+    detail = found["TXT-CLOSING-WIRE"].detail
+    assert " ... " in detail
+    assert all(len(part) <= 90 for part in detail.split("Matched: ")[1].split("; "))

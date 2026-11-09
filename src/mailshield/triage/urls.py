@@ -126,8 +126,8 @@ _RULES = (
         "URL-USERINFO",
         Severity.HIGH,
         "Link hides its real destination behind a username",
-        "In a link like https://shop.example.com@evil.example.net the real host is the part "
-        "after the @.",
+        "In a link like hxxps://shop[.]example[.]com@evil[.]example[.]net the real host is the "
+        "part after the @.",
         "Do not click. Check where the link really goes.",
     ),
     (
@@ -215,7 +215,7 @@ def analyze_urls(body: Body) -> UrlAnalysis:
                 fid,
                 severity,
                 title,
-                f"{intro} Found in {len(items)} link(s): {'; '.join(items[:3])}{more}.",
+                f"{intro} Found in {len(items)} link(s): {'; '.join(items[:3])}{more}",
                 fix,
             )
         )

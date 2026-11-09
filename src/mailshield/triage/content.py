@@ -123,7 +123,10 @@ def analyze_content(subject: str, body: Body) -> list[Finding]:
         for pattern in signal.patterns:
             match = pattern.search(text)
             if match:
-                hits.append(clean(match.group(0), 80))
+                snippet = match.group(0)
+                if len(snippet) > 60:  # keep proximity matches readable
+                    snippet = f"{snippet[:28]} ... {snippet[-28:]}"
+                hits.append(clean(snippet, 80))
         if len(hits) >= signal.min_hits:
             quoted = "; ".join(f"'{h}'" for h in hits[:3])
             findings.append(
