@@ -1,0 +1,10 @@
+Received: from host.example.org (host.example.org [203.0.113.6])
+	by mx.example.net with ESMTP id z1
+	for <reader@example.net>; Fri, 06 Mar 2026 09:00:10 +0000
+From: Trusted Person <trusted@example.com>
+From: attacker@example.org
+To: reader@example.net
+Subject: Hello
+Date: Fri, 06 Mar 2026 09:00:00 +0000
+
+Body.

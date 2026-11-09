@@ -1,0 +1,12 @@
+Received: from b.example.net (b.example.net [198.51.100.20])
+	by mx.example.org with ESMTP id r1
+	for <reader@example.org>; Tue, 03 Mar 2026 09:00:00 +0000
+Received: from a.example.net (a.example.net [198.51.100.21])
+	by b.example.net with ESMTP id r0
+	for <reader@example.org>; Tue, 03 Mar 2026 11:30:00 +0000
+From: Sender <sender@example.net>
+To: reader@example.org
+Subject: Old news
+Date: Mon, 01 Jan 2024 00:00:00 +0000
+
+Body.

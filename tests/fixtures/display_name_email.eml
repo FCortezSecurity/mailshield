@@ -1,0 +1,9 @@
+Received: from host.example.org (host.example.org [203.0.113.5])
+	by mx.example.net with ESMTP id y1
+	for <reader@example.net>; Thu, 05 Mar 2026 08:00:10 +0000
+From: "billing@example.com Support" <random.sender@example.org>
+To: reader@example.net
+Subject: Invoice attached
+Date: Thu, 05 Mar 2026 08:00:00 +0000
+
+Please see the attached invoice.

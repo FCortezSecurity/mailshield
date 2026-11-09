@@ -1,0 +1,16 @@
+Received: from relay.example.net (relay.example.net [198.51.100.7])
+	by mx.example.org with ESMTP id x1
+	for <finance@example.org>; Wed, 04 Mar 2026 14:00:30 +0000
+Authentication-Results: mx.example.org;
+	spf=fail smtp.mailfrom=example.net;
+	dkim=none;
+	dmarc=fail header.from=example.net
+Return-Path: <jane.smith@example.net>
+From: "Jane Smith" <jane.smith@example.net>
+Reply-To: jane.smith.office@gmail.com
+To: finance@example.org
+Subject: Urgent - please update vendor payment details
+Date: Wed, 04 Mar 2026 14:00:00 +0000
+Message-ID: <2@example.net>
+
+Please process this today and reply to me directly, I am in meetings.
