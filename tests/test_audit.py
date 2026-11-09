@@ -55,3 +55,32 @@ def test_softfail_costs_points_without_enforcement(make_resolver):
         }
     )
     assert audit_domain("example.com", r).score == 80
+
+
+NULL_DMARC = "v=DMARC1;p=reject;sp=reject;adkim=s;aspf=s"
+
+
+def test_null_sender_domain_is_recognized(make_resolver):
+    r = make_resolver(
+        {"example.com": ["v=spf1 -all"], "_dmarc.example.com": [NULL_DMARC]},
+    )
+    report = audit_domain("example.com", r)
+    assert report.null_sender is True
+    assert report.score == 100
+    assert {f.id for f in report.findings} == {"NULL-SENDER-DOMAIN"}
+
+
+def test_null_sender_requires_enforcing_dmarc(make_resolver):
+    r = make_resolver(
+        {"example.com": ["v=spf1 -all"], "_dmarc.example.com": ["v=DMARC1; p=none"]},
+    )
+    report = audit_domain("example.com", r)
+    assert report.null_sender is False
+    assert "DMARC-NO-RUA" in {f.id for f in report.findings}
+
+
+def test_domain_with_senders_is_not_null_sender(make_resolver):
+    r = make_resolver(
+        {"example.com": ["v=spf1 ip4:192.0.2.1 -all"], "_dmarc.example.com": [NULL_DMARC]},
+    )
+    assert audit_domain("example.com", r).null_sender is False

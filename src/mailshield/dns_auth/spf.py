@@ -238,6 +238,19 @@ def _check_all(terms: list[Term], add) -> None:
         )
 
 
+def is_null_sender_policy(record: str) -> bool:
+    """True for 'v=spf1 -all': no server is allowed to send as this domain."""
+    terms = parse_terms(record)
+    mechs = [t for t in terms if t.kind == "mechanism"]
+    has_redirect = any(t.kind == "modifier" and t.name == "redirect" for t in terms)
+    return (
+        len(mechs) == 1
+        and mechs[0].name == "all"
+        and mechs[0].qualifier == "-"
+        and not has_redirect
+    )
+
+
 def audit_spf(domain: str, resolver: Resolver) -> SpfResult:
     walker = _Walker(resolver)
     record = walker.fetch(domain)

@@ -7,7 +7,7 @@ from dataclasses import dataclass, replace
 from mailshield.dns_auth.dkim import DkimResult, audit_dkim
 from mailshield.dns_auth.dmarc import ENFORCING, DmarcResult, audit_dmarc
 from mailshield.dns_auth.resolver import Resolver
-from mailshield.dns_auth.spf import SpfResult, audit_spf
+from mailshield.dns_auth.spf import SpfResult, audit_spf, is_null_sender_policy
 from mailshield.models import Finding, Severity
 from mailshield.scoring import grade, score
 
@@ -29,6 +29,7 @@ class AuditReport:
     spf: SpfResult
     dmarc: DmarcResult
     dkim: DkimResult
+    null_sender: bool = False
 
     @property
     def findings(self) -> list[Finding]:
@@ -49,6 +50,7 @@ class AuditReport:
                 "selectors_probed": len(self.dkim.probed),
                 "selectors_found": [k.selector for k in self.dkim.keys],
             },
+            "null_sender": self.null_sender,
             "findings": [f.to_dict() for f in self.findings],
         }
 
@@ -66,5 +68,23 @@ def audit_domain(raw_domain: str, resolver: Resolver, selectors: Sequence[str] =
             else f
             for f in spf.findings
         ]
+    null_sender = (
+        spf.record is not None and is_null_sender_policy(spf.record) and dmarc.policy in ENFORCING
+    )
+    if null_sender:
+        # A domain that declares "I send no mail" doesn't need reporting or DKIM.
+        irrelevant = {"DMARC-NO-RUA", "DMARC-STRICT-ADKIM", "DMARC-STRICT-ASPF", "DKIM-NOT-FOUND"}
+        dmarc.findings = [f for f in dmarc.findings if f.id not in irrelevant]
+        dkim.findings = [f for f in dkim.findings if f.id not in irrelevant]
+        spf.findings.append(
+            Finding(
+                "NULL-SENDER-DOMAIN",
+                Severity.INFO,
+                "Domain publishes a no-mail policy",
+                "SPF is '-all' with no authorized senders and DMARC enforces, so this domain "
+                "declares that it sends no email. Reporting and DKIM checks do not apply.",
+                "No action needed. Keep both records in place to prevent spoofing.",
+            )
+        )
     value = score([*spf.findings, *dmarc.findings, *dkim.findings])
-    return AuditReport(domain, value, grade(value), spf, dmarc, dkim)
+    return AuditReport(domain, value, grade(value), spf, dmarc, dkim, null_sender)
